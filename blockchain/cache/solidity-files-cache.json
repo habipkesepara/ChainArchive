@@ -1,0 +1,41 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "C:\\Users\\habip\\OneDrive\\Desktop\\Projeler\\Dağıtık Defter Proje\\blockchain\\contracts\\ChainArchive.sol": {
+      "lastModificationDate": 1780233396442,
+      "contentHash": "1d4a4bfc12b68651e91642fd00e1554f",
+      "sourceName": "contracts/ChainArchive.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ChainArchive"
+      ]
+    }
+  }
+}
