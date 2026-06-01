@@ -336,6 +336,8 @@ function App() {
     setError(null);
     setArchiveResult(null);
 
+    let uploadedCid = '';
+
     try {
       // 1. Backend'e İstek At (Ekran görüntüsü, HTML alma ve Metadataları gönderme)
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
@@ -352,6 +354,7 @@ function App() {
       }
       
       const cid = data.cid;
+      uploadedCid = cid;
       const screenshot = data.screenshot;
       
       // 2. Akıllı Sözleşme İşlemi (Blockchain'e yazma - Sepolia Testnet)
@@ -379,6 +382,19 @@ function App() {
       fetchHistory();
     } catch (err: unknown) {
       setError(parseError(err));
+      
+      if (uploadedCid) {
+        try {
+          const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+          await fetch(`${backendUrl}/api/unpin`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cid: uploadedCid })
+          });
+        } catch (e) {
+          console.error("IPFS temizleme hatası:", e);
+        }
+      }
     } finally {
       setArchiveStep('idle');
     }

@@ -234,6 +234,28 @@ app.post('/api/metadata', async (req, res) => {
     }
 });
 
+// İptal durumunda (MetaMask reddi vs.) IPFS'ten dosyayı silmek için
+app.delete('/api/unpin', async (req, res) => {
+    try {
+        const { cid } = req.body;
+        if (!cid) return res.status(400).json({ error: 'cid gerekli' });
+        
+        if (process.env.PINATA_JWT) {
+            const axios = require('axios');
+            await axios.delete(`https://api.pinata.cloud/pinning/unpin/${cid}`, {
+                headers: {
+                    'Authorization': `Bearer ${process.env.PINATA_JWT}`
+                }
+            });
+            console.log(`[IPFS] İptal edilen işlem için CID silindi: ${cid}`);
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error("[IPFS] Unpin hatası:", error.message);
+        res.status(500).json({ error: 'Unpin işlemi başarısız' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`🚀 ChainArchive Backend Server ${PORT} portunda çalışıyor.`);
     console.log(`📡 Tarayıcı robotu (Puppeteer) hazır.`);
