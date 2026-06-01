@@ -173,6 +173,61 @@ app.post('/api/archive', async (req, res) => {
     }
 });
 
+// Keşfet Sayfası Endpoint'i
+app.get('/api/explore', async (req, res) => {
+    try {
+        const response = await fetch(`https://api.pinata.cloud/data/pinList?status=pinned&pageLimit=50`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.PINATA_JWT}`
+            }
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error('Pinata API hatası');
+        
+        // Sadece bizim formatımızdaki (ChainArchive_) metadataları filtrele
+        const archives = data.rows
+            .filter(row => row.metadata && row.metadata.name && row.metadata.name.startsWith('ChainArchive_'))
+            .map(row => ({
+                cid: row.ipfs_pin_hash,
+                timestamp: row.date_pinned,
+                size: row.size,
+                ...row.metadata.keyvalues
+            }));
+            
+        res.json(archives);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Keşfet verileri alınamadı' });
+    }
+});
+
+// Toplu Metadata getirme (Sorgula sonuçları için)
+app.post('/api/metadata', async (req, res) => {
+    try {
+        const { cids } = req.body;
+        if (!cids || !Array.isArray(cids)) return res.status(400).json({ error: 'cids dizisi gerekli' });
+        
+        const metadataMap = {};
+        
+        const response = await fetch(`https://api.pinata.cloud/data/pinList?status=pinned&pageLimit=100`, {
+            headers: { 'Authorization': `Bearer ${process.env.PINATA_JWT}` }
+        });
+        const data = await response.json();
+        
+        if (data.rows) {
+            data.rows.forEach(row => {
+                if (cids.includes(row.ipfs_pin_hash)) {
+                    metadataMap[row.ipfs_pin_hash] = row.metadata.keyvalues || {};
+                }
+            });
+        }
+        res.json(metadataMap);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Metadata alınamadı' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`🚀 ChainArchive Backend Server ${PORT} portunda çalışıyor.`);
     console.log(`📡 Tarayıcı robotu (Puppeteer) hazır.`);

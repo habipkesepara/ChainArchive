@@ -12,13 +12,40 @@ declare global {
 }
 
 interface ArchiveHistory {
-  id: string;
+  id?: string;
   url: string;
   cid: string;
   timestamp: string;
-  txHash: string;
+  txHash?: string;
   archiver?: string;
+  title?: string;
+  tag?: string;
+  author?: string;
 }
+
+const parseError = (err: unknown): string => {
+  if (!err) return "Bilinmeyen bir hata oluştu.";
+  const msg = err instanceof Error ? err.message : (typeof err === 'string' ? err : String(err));
+  
+  if (msg.includes("user rejected action") || msg.includes("User denied transaction signature") || msg.includes("ACTION_REJECTED")) {
+    return "İşlem iptal edildi: MetaMask üzerinden onayı reddettiniz.";
+  }
+  if (msg.includes("insufficient funds")) {
+    return "Bakiye yetersiz: Cüzdanınızda bu işlem için yeterli SepoliaETH bulunmuyor.";
+  }
+  if (msg.includes("NetworkError") || msg.includes("network error")) {
+    return "Bağlantı hatası: İnternet bağlantınızı veya ağ ayarlarınızı kontrol edin.";
+  }
+  if (msg.includes("Internal JSON-RPC error") || msg.includes("execution reverted")) {
+    return "Ağ hatası: Blokzincir işlemi başarısız oldu. Ağ yoğun olabilir.";
+  }
+  
+  if (msg.length > 100) {
+    return "Teknik bir hata oluştu. Lütfen tekrar deneyin. (Hata detayı gizlendi)";
+  }
+  
+  return msg;
+};
 
 // ChainArchive Akıllı Sözleşme ABI'si
 const ChainArchiveABI = [
@@ -49,6 +76,11 @@ function App() {
   const [searchResults, setSearchResults] = useState<ArchiveHistory[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Keşfet Durum Değişkenleri
+  const [pageView, setPageView] = useState<'home' | 'explore'>('home');
+  const [exploreResults, setExploreResults] = useState<ArchiveHistory[]>([]);
+  const [isFetchingExplore, setIsFetchingExplore] = useState(false);
 
   // Uygulama açıldığında cüzdanı kontrol et
   useEffect(() => {
@@ -114,7 +146,7 @@ function App() {
       setError(null);
     } catch (err: unknown) {
       console.error(err);
-      setError("Cüzdan bağlantısı reddedildi.");
+      setError(parseError(err));
     }
   };
 
@@ -143,9 +175,33 @@ function App() {
         };
       }).reverse(); // En yeniler en üstte
       
+      // Metadata çek
+      if (parsedHistory.length > 0) {
+        try {
+          const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+          const cids = parsedHistory.map(f => f.cid);
+          const metaRes = await fetch(`${backendUrl}/api/metadata`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cids })
+          });
+          const metaMap = await metaRes.json();
+          parsedHistory.forEach(item => {
+            if (metaMap[item.cid]) {
+              item.title = metaMap[item.cid].title;
+              item.tag = metaMap[item.cid].tag;
+              item.author = metaMap[item.cid].author;
+            }
+          });
+        } catch (e) {
+          console.error("Metadata hatası:", e);
+        }
+      }
+
       setHistory(parsedHistory);
     } catch (err) {
       console.error("Geçmiş çekilirken hata:", err);
+      setError(parseError(err));
     } finally {
       setIsFetchingHistory(false);
     }
@@ -206,12 +262,58 @@ function App() {
         .filter(item => item.url.toLowerCase().includes(url.toLowerCase().trim()))
         .reverse();
 
+      // Metadata çek
+      if (filtered.length > 0) {
+        try {
+          const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+          const cids = filtered.map(f => f.cid);
+          const metaRes = await fetch(`${backendUrl}/api/metadata`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cids })
+          });
+          const metaMap = await metaRes.json();
+          filtered.forEach(item => {
+            if (metaMap[item.cid]) {
+              item.title = metaMap[item.cid].title;
+              item.tag = metaMap[item.cid].tag;
+              item.author = metaMap[item.cid].author;
+            }
+          });
+        } catch (e) {
+          console.error("Metadata fetch error:", e);
+        }
+      }
+
       setSearchResults(filtered);
     } catch (err: unknown) {
       console.error(err);
-      setError("Arama sırasında bir hata oluştu.");
+      setError(parseError(err));
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const fetchExplore = async () => {
+    setIsFetchingExplore(true);
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${backendUrl}/api/explore`);
+      const data = await response.json();
+      
+      const parsed: ArchiveHistory[] = data.map((item: { url: string; originalUrl: string; cid: string; timestamp: string; title: string; tag: string; author: string; }) => ({
+        url: item.originalUrl || item.url || "",
+        cid: item.cid,
+        timestamp: new Date(item.timestamp).toLocaleString(),
+        title: item.title,
+        tag: item.tag,
+        author: item.author
+      }));
+      setExploreResults(parsed);
+    } catch (err) {
+      console.error("Keşfet hatası:", err);
+    } finally {
+      setIsFetchingExplore(false);
     }
   };
 
@@ -272,8 +374,7 @@ function App() {
       // Başarılı işlem sonrası geçmişi yenile
       fetchHistory();
     } catch (err: unknown) {
-      const error = err as Error;
-      setError(error.message || "Arşivleme sırasında bir hata oluştu.");
+      setError(parseError(err));
     } finally {
       setArchiveStep('idle');
     }
@@ -287,11 +388,28 @@ function App() {
       {/* Üst Menü */}
       <header className="border-b border-white/10 bg-zinc-950/50 backdrop-blur-md sticky top-0 z-50">
         <div className="container max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.5)]">
-              <Database className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setPageView('home')}>
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+                <Database className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-2xl font-bold tracking-tight text-white hidden sm:block">ChainArchive</span>
             </div>
-            <span className="font-bold text-2xl tracking-tight">ChainArchive</span>
+            
+            <nav className="flex gap-6">
+              <button 
+                onClick={() => setPageView('home')}
+                className={`text-sm font-medium transition-colors ${pageView === 'home' ? 'text-white border-b-2 border-purple-500 py-7' : 'text-zinc-400 hover:text-white py-7'}`}
+              >
+                Ana Sayfa
+              </button>
+              <button 
+                onClick={() => { setPageView('explore'); fetchExplore(); }}
+                className={`text-sm font-medium transition-colors ${pageView === 'explore' ? 'text-white border-b-2 border-emerald-500 py-7' : 'text-zinc-400 hover:text-white py-7'}`}
+              >
+                Keşfet
+              </button>
+            </nav>
           </div>
           <button 
             onClick={connectWallet}
@@ -308,8 +426,10 @@ function App() {
         
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[600px] bg-purple-500/20 blur-[150px] rounded-full pointer-events-none" />
         
-        <div className="text-center max-w-4xl z-10 w-full">
-          <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6 bg-gradient-to-br from-white to-white/40 bg-clip-text text-transparent">
+        {pageView === 'home' ? (
+          <>
+            <div className="text-center max-w-4xl z-10 w-full">
+            <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6 bg-gradient-to-br from-white to-white/40 bg-clip-text text-transparent">
             Merkeziyetsiz <br/> Dijital Hafıza
           </h1>
           <p className="text-zinc-400 text-lg md:text-xl mb-8 max-w-2xl mx-auto leading-relaxed">
@@ -438,8 +558,13 @@ function App() {
                         <Search className="w-3 h-3" /> Görüntüle
                       </a>
                     </div>
-                    <div className="text-zinc-100 font-medium truncate">{item.url}</div>
-                    <div className="text-xs text-zinc-500 bg-black/30 p-2 rounded-lg">Arşivleyen: <span className="font-mono text-zinc-400">{formatAddress(item.archiver || "")}</span></div>
+                    <div className="text-zinc-100 font-medium truncate">{item.title && item.title !== "Başlıksız Arşiv" ? item.title : item.url}</div>
+                    {item.title && item.title !== "Başlıksız Arşiv" && <div className="text-xs text-zinc-400 truncate">{item.url}</div>}
+                    <div className="flex gap-2 flex-wrap mt-2">
+                      {item.tag && <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-1 rounded border border-purple-500/20">{item.tag}</span>}
+                      {item.author && item.author !== "Anonim" && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded border border-blue-500/20">👤 {item.author}</span>}
+                      {item.archiver && <div className="text-[10px] text-zinc-500 bg-black/30 px-2 py-1 rounded border border-white/5">Cüzdan: <span className="font-mono text-zinc-400">{formatAddress(item.archiver)}</span></div>}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -510,8 +635,8 @@ function App() {
           )}
         </div>
 
-        {/* Avantajlar / Özellikler */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full mt-20 z-10">
+            {/* Özellikler */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full mt-20 z-10">
           <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl backdrop-blur-sm hover:bg-zinc-800/50 transition-colors">
             <ShieldCheck className="w-8 h-8 text-purple-400 mb-4" />
             <h3 className="text-lg font-semibold text-zinc-100 mb-2">Sansüre Dirençli</h3>
@@ -535,9 +660,10 @@ function App() {
           </div>
         </div>
 
-        {/* Geçmiş Arşivler */}
-        {account && (
-          <div className="max-w-6xl w-full mt-20 z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Geçmiş Arşivler */}
+            {account && pageView === 'home' && (
+              <div className="max-w-6xl w-full mt-20 z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
             <div className="flex items-center justify-center gap-2 mb-8">
               <Clock className="w-6 h-6 text-purple-400" />
               <h2 className="text-2xl font-bold text-zinc-100">Geçmiş Arşivleriniz</h2>
@@ -558,7 +684,7 @@ function App() {
                     <div>
                       <div className="text-sm text-purple-400 mb-2 font-mono font-medium">{item.timestamp}</div>
                       <a href={item.url} target="_blank" rel="noreferrer" className="text-lg md:text-xl font-bold text-zinc-100 hover:text-white hover:underline line-clamp-1 mb-3">
-                        {item.url}
+                        {item.title && item.title !== "Başlıksız Arşiv" ? item.title : item.url}
                       </a>
                     </div>
                     
@@ -575,7 +701,6 @@ function App() {
                         className="w-full h-32 object-cover opacity-80 group-hover:opacity-100 transition-all duration-500 transform group-hover:scale-105"
                         loading="lazy"
                         onError={(e) => {
-                          // IPFS yavaşsa veya yüklenmezse yedek bir ikon göster
                           (e.target as HTMLImageElement).style.display = 'none';
                           (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center', 'h-40');
                           (e.target as HTMLImageElement).parentElement!.innerHTML = '<div class="text-zinc-600 text-sm flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 mb-2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>Görsel IPFS\'ten yükleniyor...</div>';
@@ -584,18 +709,66 @@ function App() {
                     </div>
 
                     <div className="bg-zinc-950/50 p-4 rounded-xl border border-white/5 flex flex-col gap-3 mt-auto">
+                      <div className="flex flex-wrap gap-2 mb-2">
+                          {item.tag && <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-1 rounded border border-purple-500/20">{item.tag}</span>}
+                          {item.author && item.author !== "Anonim" && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded border border-blue-500/20">👤 {item.author}</span>}
+                      </div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">IPFS CID</span>
                         <a href={`https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="text-sm font-mono text-emerald-400 hover:text-emerald-300 hover:underline truncate ml-4 max-w-[200px]">
                           {item.cid}
                         </a>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">İşlem (Tx)</span>
-                        <a href={`https://sepolia.etherscan.io/tx/${item.txHash}`} target="_blank" rel="noreferrer" className="text-sm font-mono text-blue-400 hover:text-blue-300 hover:underline truncate ml-4 max-w-[200px]">
-                          {formatAddress(item.txHash)}
-                        </a>
-                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+            )}
+          </>
+        ) : (
+          <div className="max-w-6xl w-full z-10 mt-10">
+            <div className="flex items-center justify-between mb-10 border-b border-white/10 pb-6">
+              <div>
+                <h2 className="text-3xl font-bold flex items-center gap-3">
+                  <Database className="w-8 h-8 text-emerald-400" />
+                  Keşfet
+                </h2>
+                <p className="text-zinc-400 mt-2">Ağdaki diğer kullanıcıların blokzincire kazıdığı son arşivleri inceleyin.</p>
+              </div>
+              <button 
+                onClick={fetchExplore} 
+                className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm"
+              >
+                {isFetchingExplore ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yenile"}
+              </button>
+            </div>
+            
+            {isFetchingExplore && exploreResults.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
+                <Loader2 className="w-8 h-8 animate-spin mb-4 text-emerald-500" />
+                <p>Arşivler ağdan çekiliyor...</p>
+              </div>
+            ) : exploreResults.length === 0 ? (
+              <div className="text-center py-20 text-zinc-500 bg-zinc-900/30 rounded-3xl border border-white/5">
+                Henüz genel ağda bir arşiv bulunamadı.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {exploreResults.map((item, index) => (
+                  <div key={index} className="bg-zinc-900/80 border border-white/10 p-6 rounded-3xl flex flex-col gap-4 hover:border-emerald-500/50 transition-all hover:shadow-lg hover:shadow-emerald-500/10 group">
+                    <div className="flex justify-between items-start">
+                      <span className="text-sm font-mono text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded">{item.timestamp}</span>
+                      <a href={`https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="text-xs bg-zinc-800 text-zinc-300 hover:bg-emerald-500 hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium">Görüntüle</a>
+                    </div>
+                    <div>
+                      <div className="text-zinc-100 font-bold text-lg line-clamp-2 mb-1 group-hover:text-emerald-400 transition-colors">{item.title && item.title !== "Başlıksız Arşiv" ? item.title : item.url}</div>
+                      {item.title && item.title !== "Başlıksız Arşiv" && <div className="text-xs text-zinc-500 truncate">{item.url}</div>}
+                    </div>
+                    <div className="flex gap-2 flex-wrap mt-auto pt-2 border-t border-white/5">
+                      {item.tag && <span className="text-[11px] bg-purple-500/20 text-purple-400 px-2 py-1 rounded font-medium">{item.tag}</span>}
+                      {item.author && item.author !== "Anonim" && <span className="text-[11px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded font-medium">👤 {item.author}</span>}
                     </div>
                   </div>
                 ))}
