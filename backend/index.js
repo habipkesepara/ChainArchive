@@ -7,18 +7,33 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+const rateLimit = require('express-rate-limit');
 
-// Helper function to simulate IPFS CID generation
+// Rate Limiting (Aynı IP'den 1 dakikada en fazla 3 istek)
+const limiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 dakika
+    max: 3, // Her IP için limit
+    message: { error: 'Çok fazla istek attınız, lütfen 1 dakika sonra tekrar deneyin.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Middleware
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Vercel URL'sini .env'den al veya local'e izin ver
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type']
+}));
+app.use(express.json());
+app.use('/api/', limiter); // Sadece API yollarına limit koy
+
+// Sahte IPFS CID oluşturma aracı (Yedek)
 const generateMockCID = (content) => {
     const hash = crypto.createHash('sha256').update(content).digest('hex');
-    // Simulated IPFS CID starting with Qm
     return `Qm${hash.substring(0, 44)}`;
 };
 
-// Launch options (headless browser)
+// Puppeteer tarayıcı ayarları
 const launchOptions = {
     headless: "new",
     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -74,7 +89,7 @@ app.post('/api/archive', async (req, res) => {
         const browser = await getBrowser();
         page = await browser.newPage();
         
-        // Set viewport to a standard desktop size
+        // Standart masaüstü görünümü
         await page.setViewport({ width: 1280, height: 800 });
 
         console.log(`[Crawler] Sayfa yükleniyor...`);
@@ -82,15 +97,14 @@ app.post('/api/archive', async (req, res) => {
         // Bu yüzden 'domcontentloaded' (sayfa iskeleti yüklendiğinde) kullanıyoruz.
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
         
-        // Sayfanın görsel olarak biraz daha oturması için ekstra 1 saniye bekle (Hızlandırıldı!)
+        // Sayfanın görsel olarak biraz daha oturması için ekstra 1 saniye bekle
         await new Promise(r => setTimeout(r, 1000));
 
         console.log(`[Crawler] Ekran görüntüsü ve HTML alınıyor...`);
         
-        // Get HTML content
         const htmlContent = await page.content();
         
-        // Take screenshot as base64 (Tam sayfa ekran görüntüsü)
+        // Tam sayfa ekran görüntüsünü al
         const screenshotBase64 = await page.screenshot({ encoding: 'base64', fullPage: true, type: 'jpeg', quality: 60 });
 
         console.log(`[Crawler] İşlem başarılı. IPFS/Pinata'ya yükleniyor...`);

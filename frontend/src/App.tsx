@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Search, Link as LinkIcon, Clock, ShieldCheck, Database, ArrowRight, Loader2, CheckCircle2, Wallet } from 'lucide-react';
 import { BrowserProvider, Contract } from 'ethers';
 
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      on: (eventName: string, handler: (...args: unknown[]) => void) => void;
+    };
   }
 }
 
@@ -16,7 +19,7 @@ interface ArchiveHistory {
   txHash: string;
 }
 
-// ChainArchive Contract ABI (Simplified for our needs)
+// ChainArchive Akıllı Sözleşme ABI'si
 const ChainArchiveABI = [
   "function createArchive(string memory _url, string memory _cid) public",
   "event ArchiveCreated(uint256 indexed archiveId, string url, string cid, address indexed archiver, uint256 timestamp)"
@@ -31,46 +34,78 @@ function App() {
   const [archiveResult, setArchiveResult] = useState<{ cid: string; timestamp: string; txHash?: string; screenshot?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Web3 States
   const [account, setAccount] = useState<string | null>(null);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [history, setHistory] = useState<ArchiveHistory[]>([]);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
-  // Check if wallet is already connected
+  // Uygulama açıldığında cüzdanı kontrol et
   useEffect(() => {
-    if (window.ethereum) {
-      const web3Provider = new BrowserProvider(window.ethereum);
-      setProvider(web3Provider);
-      
-      window.ethereum.request({ method: 'eth_accounts' })
-        .then((accounts: string[]) => {
-          if (accounts.length > 0) setAccount(accounts[0]);
-        })
-        .catch(console.error);
+    let isMounted = true;
+    const initWeb3 = async () => {
+      if (window.ethereum) {
+        await Promise.resolve(); // Delay state update to avoid sync render warning
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const web3Provider = new BrowserProvider(window.ethereum as any);
+        if (isMounted) setProvider(web3Provider);
+        
+        window.ethereum.request({ method: 'eth_accounts' })
+          .then((accounts) => {
+            const accs = accounts as string[];
+            if (isMounted && accs.length > 0) setAccount(accs[0]);
+          })
+          .catch(console.error);
 
-      window.ethereum.on('accountsChanged', (accounts: string[]) => {
-        setAccount(accounts.length > 0 ? accounts[0] : null);
-      });
-    }
+        window.ethereum.on('accountsChanged', (accounts: unknown) => {
+          const accs = accounts as string[];
+          if (isMounted) setAccount(accs && accs.length > 0 ? accs[0] : null);
+        });
+      }
+    };
+    initWeb3();
+    return () => { isMounted = false; };
   }, []);
+
+  const checkAndSwitchNetwork = async () => {
+    if (!window.ethereum) return false;
+    try {
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const sepoliaChainId = '0xaa36a7'; // Sepolia Hex Chain ID (11155111)
+      if (chainId !== sepoliaChainId) {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: sepoliaChainId }],
+        });
+      }
+      return true;
+    } catch (switchError: unknown) {
+      const err = switchError as { code?: number; message?: string };
+      if (err.code === 4902) {
+        setError("Sepolia ağı cüzdanınızda bulunamadı. Lütfen ağlar kısmından manuel olarak ekleyin.");
+      } else {
+        setError("Sepolia ağına geçiş reddedildi veya bir hata oluştu.");
+      }
+      return false;
+    }
+  };
 
   const connectWallet = async () => {
     if (!window.ethereum) {
-      setError("Lütfen tarayıcınıza MetaMask eklentisini kurun.");
+      setError("Lütfen tarayıcınıza MetaMask eklentisini kurun. (https://metamask.io/)");
       return;
     }
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' }) as string[];
       setAccount(accounts[0]);
+      await checkAndSwitchNetwork();
       setError(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Cüzdan bağlantısı reddedildi.");
     }
   };
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     if (!account || !provider) return;
     
     setIsFetchingHistory(true);
@@ -82,8 +117,9 @@ function App() {
       // Geçmiş olayları çek
       const logs = await contract.queryFilter(filter);
       
-      const parsedHistory: ArchiveHistory[] = logs.map((log: any) => {
-        const parsedLog = contract.interface.parseLog(log);
+      const parsedHistory: ArchiveHistory[] = logs.map((log) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const parsedLog = contract.interface.parseLog(log as any);
         return {
           id: parsedLog?.args[0].toString() || "",
           url: parsedLog?.args[1] || "",
@@ -99,15 +135,17 @@ function App() {
     } finally {
       setIsFetchingHistory(false);
     }
-  };
+  }, [account, provider]);
 
   useEffect(() => {
+    let isMounted = true;
     if (account && provider) {
-      fetchHistory();
+      setTimeout(() => { if (isMounted) fetchHistory(); }, 0);
     } else {
-      setHistory([]);
+      setTimeout(() => { if (isMounted) setHistory([]); }, 0);
     }
-  }, [account, provider]);
+    return () => { isMounted = false; };
+  }, [account, provider, fetchHistory]);
 
   const handleArchive = async () => {
     if (!url.trim()) return;
@@ -116,6 +154,10 @@ function App() {
       return;
     }
     
+    // Ağ kontrolü yap (Kullanıcı sonradan değiştirmiş olabilir)
+    const isNetworkCorrect = await checkAndSwitchNetwork();
+    if (!isNetworkCorrect) return;
+
     setArchiveStep('crawling');
     setError(null);
     setArchiveResult(null);
@@ -161,8 +203,9 @@ function App() {
       
       // Başarılı işlem sonrası geçmişi yenile
       fetchHistory();
-    } catch (err: any) {
-      setError(err.message || "Arşivleme sırasında bir hata oluştu.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Arşivleme sırasında bir hata oluştu.");
     } finally {
       setArchiveStep('idle');
     }
@@ -173,7 +216,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 font-sans flex flex-col">
-      {/* Navbar */}
+      {/* Üst Menü */}
       <header className="border-b border-white/10 bg-zinc-950/50 backdrop-blur-md sticky top-0 z-50">
         <div className="container max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -192,9 +235,9 @@ function App() {
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* Ana Bölüm */}
       <main className="flex-grow flex flex-col items-center pt-32 pb-20 px-6 relative overflow-hidden">
-        {/* Background glow */}
+        
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[600px] bg-purple-500/20 blur-[150px] rounded-full pointer-events-none" />
         
         <div className="text-center max-w-4xl z-10 w-full">
@@ -205,7 +248,7 @@ function App() {
             İnternet üzerindeki bilginin kaybolmasını, değiştirilmesini veya sansürlenmesini engelleyin. İçerikleri sonsuza kadar blokzincire kazıyın.
           </p>
 
-          {/* Main Input Area */}
+          {/* Arşivleme Girdi Alanı */}
           <div className="relative max-w-2xl mx-auto group mb-8">
             <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-blue-500 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-500"></div>
             <div className="relative bg-zinc-900 ring-1 ring-white/10 rounded-2xl flex flex-col md:flex-row items-center p-2 shadow-2xl">
@@ -240,14 +283,12 @@ function App() {
             </div>
           </div>
 
-          {/* Error Message */}
           {error && (
             <div className="max-w-3xl mx-auto mb-10 p-5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-base">
               {error}
             </div>
           )}
 
-          {/* Result Card */}
           {archiveResult && (
             <div className="max-w-3xl mx-auto mb-10 p-8 bg-zinc-900/80 border border-emerald-500/30 rounded-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="flex items-center gap-4 mb-6">
@@ -300,7 +341,7 @@ function App() {
           )}
         </div>
 
-        {/* Stats/Features Grid */}
+        {/* Avantajlar / Özellikler */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full mt-20 z-10">
           <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl backdrop-blur-sm hover:bg-zinc-800/50 transition-colors">
             <ShieldCheck className="w-8 h-8 text-purple-400 mb-4" />
@@ -325,7 +366,7 @@ function App() {
           </div>
         </div>
 
-        {/* History Section */}
+        {/* Geçmiş Arşivler */}
         {account && (
           <div className="max-w-6xl w-full mt-20 z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-center gap-2 mb-8">
