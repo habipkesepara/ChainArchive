@@ -34,6 +34,7 @@ function App() {
   const [title, setTitle] = useState('');
   const [tag, setTag] = useState('Diğer');
   const [author, setAuthor] = useState('');
+  const [activeMode, setActiveMode] = useState<'archive' | 'search'>('archive');
   const [archiveStep, setArchiveStep] = useState<'idle' | 'crawling' | 'wallet_approval' | 'mining'>('idle');
   const [archiveResult, setArchiveResult] = useState<{ cid: string; timestamp: string; txHash?: string; screenshot?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -315,86 +316,108 @@ function App() {
             İnternet üzerindeki bilginin kaybolmasını, değiştirilmesini veya sansürlenmesini engelleyin. İçerikleri sonsuza kadar blokzincire kazıyın.
           </p>
 
-          <div className="flex flex-col md:flex-row gap-4 max-w-3xl mx-auto mb-4 z-10 relative">
-            <input 
-              type="text" 
-              placeholder="Başlık (Opsiyonel)"
-              className="flex-grow bg-zinc-900/80 border border-white/10 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-shadow"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={archiveStep !== 'idle' || isSearching}
-              maxLength={50}
-            />
-            <input 
-              type="text" 
-              placeholder="Kullanıcı Adı (Opsiyonel)"
-              className="md:w-1/4 bg-zinc-900/80 border border-white/10 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-shadow"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              disabled={archiveStep !== 'idle' || isSearching}
-              maxLength={30}
-            />
-            <div className="relative md:w-1/4">
-              <select 
-                className="w-full bg-zinc-900/80 border border-white/10 rounded-xl px-4 py-3 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500 appearance-none transition-shadow cursor-pointer"
-                value={tag}
-                onChange={(e) => setTag(e.target.value)}
-                disabled={archiveStep !== 'idle' || isSearching}
-              >
-                <option value="Diğer">Etiket: Diğer</option>
-                <option value="Haber">Haber</option>
-                <option value="Sosyal Medya">Sosyal Medya</option>
-                <option value="Kanıt">Kanıt</option>
-                <option value="Finans">Finans</option>
-                <option value="Makale">Makale</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-zinc-400">
-                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-              </div>
-            </div>
+          {/* Mod Seçici (Sekmeler) */}
+          <div className="flex justify-center gap-4 mb-8 z-10 relative">
+            <button 
+              onClick={() => { setActiveMode('archive'); setHasSearched(false); }}
+              className={`px-6 py-2.5 rounded-full font-medium transition-all duration-300 flex items-center gap-2 ${activeMode === 'archive' ? 'bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'}`}
+            >
+              <ArrowRight className="w-4 h-4" /> Yeni Arşiv Oluştur
+            </button>
+            <button 
+              onClick={() => { setActiveMode('search'); setArchiveResult(null); }}
+              className={`px-6 py-2.5 rounded-full font-medium transition-all duration-300 flex items-center gap-2 ${activeMode === 'search' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'}`}
+            >
+              <Search className="w-4 h-4" /> Geçmişi Sorgula
+            </button>
           </div>
 
-          {/* Arşivleme Girdi Alanı */}
+          {/* Arşivleme Modu Ek Veri Alanları */}
+          {activeMode === 'archive' && (
+            <div className="flex flex-col md:flex-row gap-4 max-w-3xl mx-auto mb-4 z-10 relative animate-in fade-in slide-in-from-top-4 duration-300">
+              <input 
+                type="text" 
+                placeholder="Başlık (Opsiyonel)"
+                className="flex-grow bg-zinc-900/80 border border-white/10 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-shadow"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={archiveStep !== 'idle'}
+                maxLength={50}
+              />
+              <input 
+                type="text" 
+                placeholder="Kullanıcı Adı (Opsiyonel)"
+                className="md:w-1/4 bg-zinc-900/80 border border-white/10 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-shadow"
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                disabled={archiveStep !== 'idle'}
+                maxLength={30}
+              />
+              <div className="relative md:w-1/4">
+                <select 
+                  className="w-full bg-zinc-900/80 border border-white/10 rounded-xl px-4 py-3 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500 appearance-none transition-shadow cursor-pointer"
+                  value={tag}
+                  onChange={(e) => setTag(e.target.value)}
+                  disabled={archiveStep !== 'idle'}
+                >
+                  <option value="Diğer">Etiket: Diğer</option>
+                  <option value="Haber">Haber</option>
+                  <option value="Sosyal Medya">Sosyal Medya</option>
+                  <option value="Kanıt">Kanıt</option>
+                  <option value="Finans">Finans</option>
+                  <option value="Makale">Makale</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-zinc-400">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Ana Girdi Alanı */}
           <div className="relative max-w-2xl mx-auto group mb-8">
-            <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-blue-500 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-500"></div>
+            <div className={`absolute -inset-1 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-500 ${activeMode === 'archive' ? 'bg-gradient-to-r from-purple-500 to-blue-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`}></div>
             <div className="relative bg-zinc-900 ring-1 ring-white/10 rounded-2xl flex flex-col md:flex-row items-center p-2 shadow-2xl">
-              <div className="pl-4 pr-2 text-zinc-500 hidden md:block">
+              <div className="pl-4 pr-2 text-zinc-400 hidden md:block">
                 <LinkIcon className="w-5 h-5" />
               </div>
               <input 
                 type="text" 
-                placeholder="Arşivlenecek URL'yi girin (örn: https://news.com/...)"
+                placeholder={activeMode === 'archive' ? "Arşivlenecek URL'yi girin (örn: https://news.com/...)" : "Sorgulanacak URL'yi girin..."}
                 className="flex-grow w-full bg-transparent border-none outline-none text-zinc-100 placeholder-zinc-500 px-3 py-3 text-lg"
                 value={url}
                 onChange={(e) => { setUrl(e.target.value); setHasSearched(false); }}
                 disabled={archiveStep !== 'idle' || isSearching}
-                onKeyDown={(e) => e.key === 'Enter' && handleArchive()}
+                onKeyDown={(e) => e.key === 'Enter' && (activeMode === 'archive' ? handleArchive() : searchUrlHistory())}
               />
               <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto p-1">
-                <button 
-                  onClick={searchUrlHistory}
-                  disabled={isSearching || archiveStep !== 'idle' || !url.trim()}
-                  className="w-full md:w-auto bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-3 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                  Sorgula
-                </button>
-                <button 
-                  onClick={handleArchive}
-                  disabled={archiveStep !== 'idle' || !url.trim() || isSearching}
-                  className="w-full md:w-auto bg-purple-500 hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl text-base font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  {archiveStep !== 'idle' ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {archiveStep === 'crawling' && "Taranıyor (1/3)"}
-                      {archiveStep === 'wallet_approval' && "Cüzdan (2/3)"}
-                      {archiveStep === 'mining' && "Blokzincir (3/3)"}
-                    </span>
-                  ) : (
-                    <>Arşivle <ArrowRight className="w-4 h-4" /></>
-                  )}
-                </button>
+                {activeMode === 'search' ? (
+                  <button 
+                    onClick={searchUrlHistory}
+                    disabled={isSearching || !url.trim()}
+                    className="w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl text-base font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    Sorgula
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleArchive}
+                    disabled={archiveStep !== 'idle' || !url.trim()}
+                    className="w-full md:w-auto bg-purple-500 hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl text-base font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    {archiveStep !== 'idle' ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {archiveStep === 'crawling' && "Taranıyor (1/3)"}
+                        {archiveStep === 'wallet_approval' && "Cüzdan (2/3)"}
+                        {archiveStep === 'mining' && "Blokzincir (3/3)"}
+                      </span>
+                    ) : (
+                      <>Arşivle <ArrowRight className="w-4 h-4" /></>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>
