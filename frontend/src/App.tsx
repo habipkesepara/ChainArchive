@@ -27,7 +27,7 @@ const CONTRACT_ADDRESS = "0xA98D252939c9E8413CB98Aa665dcA7384727F9AA";
 
 function App() {
   const [url, setUrl] = useState('');
-  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveStep, setArchiveStep] = useState<'idle' | 'crawling' | 'wallet_approval' | 'mining'>('idle');
   const [archiveResult, setArchiveResult] = useState<{ cid: string; timestamp: string; txHash?: string; screenshot?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,7 +116,7 @@ function App() {
       return;
     }
     
-    setIsArchiving(true);
+    setArchiveStep('crawling');
     setError(null);
     setArchiveResult(null);
 
@@ -139,6 +139,7 @@ function App() {
       const screenshot = data.screenshot;
       
       // 2. Akıllı Sözleşme İşlemi (Blockchain'e yazma - Sepolia Testnet)
+      setArchiveStep('wallet_approval');
       const signer = await provider.getSigner();
       const contract = new Contract(CONTRACT_ADDRESS, ChainArchiveABI, signer);
       
@@ -146,6 +147,7 @@ function App() {
       const tx = await contract.createArchive(url, cid);
       
       // İşlemin blokzincire onaylanmasını bekle
+      setArchiveStep('mining');
       const receipt = await tx.wait();
       const txHash = receipt.hash;
 
@@ -162,7 +164,7 @@ function App() {
     } catch (err: any) {
       setError(err.message || "Arşivleme sırasında bir hata oluştu.");
     } finally {
-      setIsArchiving(false);
+      setArchiveStep('idle');
     }
   };
 
@@ -216,16 +218,21 @@ function App() {
                 className="flex-grow w-full bg-transparent border-none outline-none text-zinc-100 placeholder-zinc-500 px-3 py-3 text-lg"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                disabled={isArchiving}
+                disabled={archiveStep !== 'idle'}
                 onKeyDown={(e) => e.key === 'Enter' && handleArchive()}
               />
               <button 
                 onClick={handleArchive}
-                disabled={isArchiving || !url.trim()}
+                disabled={archiveStep !== 'idle' || !url.trim()}
                 className="w-full md:w-auto bg-purple-500 hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl text-base font-medium transition-colors flex items-center justify-center gap-2 mt-2 md:mt-0"
               >
-                {isArchiving ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" /> İşleniyor</>
+                {archiveStep !== 'idle' ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {archiveStep === 'crawling' && "🌐 Taranıyor (1/3)..."}
+                    {archiveStep === 'wallet_approval' && "🔑 Cüzdan Onayı (2/3)..."}
+                    {archiveStep === 'mining' && "⛓️ Blokzincir Yazımı (3/3)..."}
+                  </span>
                 ) : (
                   <>Arşivle <ArrowRight className="w-4 h-4" /></>
                 )}

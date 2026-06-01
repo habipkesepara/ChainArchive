@@ -18,6 +18,41 @@ const generateMockCID = (content) => {
     return `Qm${hash.substring(0, 44)}`;
 };
 
+// Launch options (headless browser)
+const launchOptions = {
+    headless: "new",
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+};
+
+// Eğer yerel Windows ortamındaysak, kurulu Chrome veya Edge'i kullanmayı deneyelim (opsiyonel)
+if (process.platform === 'win32') {
+    const fs = require('fs');
+    const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+    const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+    
+    if (fs.existsSync(edgePath)) {
+        launchOptions.executablePath = edgePath;
+    } else if (fs.existsSync(chromePath)) {
+        launchOptions.executablePath = chromePath;
+    }
+}
+
+// Global Tarayıcı Örneği (Singleton)
+let browserInstance = null;
+
+async function getBrowser() {
+    if (!browserInstance || !browserInstance.connected) {
+        console.log("[Puppeteer] Yeni global tarayıcı örneği başlatılıyor...");
+        browserInstance = await puppeteer.launch(launchOptions);
+        
+        browserInstance.on('disconnected', () => {
+            console.log("[Puppeteer] Tarayıcı bağlantısı kesildi, sıfırlanıyor...");
+            browserInstance = null;
+        });
+    }
+    return browserInstance;
+}
+
 app.post('/api/archive', async (req, res) => {
     const { url } = req.body;
 
@@ -25,10 +60,8 @@ app.post('/api/archive', async (req, res) => {
         return res.status(400).json({ error: 'URL is required' });
     }
 
-    let browser;
+    let page;
     try {
-        const fs = require('fs');
-        
         // URL formatını düzelt (http/https yoksa ekle)
         let targetUrl = url;
         if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
@@ -37,28 +70,9 @@ app.post('/api/archive', async (req, res) => {
 
         console.log(`[Crawler] Başlatılıyor: ${targetUrl}`);
         
-        // Launch options (headless browser)
-        const launchOptions = {
-            headless: "new",
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        };
-
-        // Eğer yerel Windows ortamındaysak, kurulu Chrome veya Edge'i kullanmayı deneyelim (opsiyonel)
-        if (process.platform === 'win32') {
-            const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-            const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-            
-            if (fs.existsSync(edgePath)) {
-                launchOptions.executablePath = edgePath;
-            } else if (fs.existsSync(chromePath)) {
-                launchOptions.executablePath = chromePath;
-            }
-        }
-        
-        // Launch Puppeteer
-        browser = await puppeteer.launch(launchOptions);
-
-        const page = await browser.newPage();
+        // Açık olan global tarayıcıyı al
+        const browser = await getBrowser();
+        page = await browser.newPage();
         
         // Set viewport to a standard desktop size
         await page.setViewport({ width: 1280, height: 800 });
@@ -68,15 +82,15 @@ app.post('/api/archive', async (req, res) => {
         // Bu yüzden 'domcontentloaded' (sayfa iskeleti yüklendiğinde) kullanıyoruz.
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
         
-        // Sayfanın görsel olarak biraz daha oturması için ekstra 2 saniye bekle
-        await new Promise(r => setTimeout(r, 2000));
+        // Sayfanın görsel olarak biraz daha oturması için ekstra 1 saniye bekle (Hızlandırıldı!)
+        await new Promise(r => setTimeout(r, 1000));
 
         console.log(`[Crawler] Ekran görüntüsü ve HTML alınıyor...`);
         
         // Get HTML content
         const htmlContent = await page.content();
         
-        // Take screenshot as base64 (JPEG formatında boyutu küçültülmüş)
+        // Take screenshot as base64 (Tam sayfa ekran görüntüsü)
         const screenshotBase64 = await page.screenshot({ encoding: 'base64', fullPage: true, type: 'jpeg', quality: 60 });
 
         console.log(`[Crawler] İşlem başarılı. IPFS/Pinata'ya yükleniyor...`);
@@ -133,8 +147,9 @@ app.post('/api/archive', async (req, res) => {
         console.error(`[Crawler] Hata oluştu:`, error);
         res.status(500).json({ error: 'Web sitesi taraması başarısız oldu: ' + error.message });
     } finally {
-        if (browser) {
-            await browser.close();
+        if (page) {
+            // Sadece sekmeyi kapatıyoruz, tarayıcıyı kapatmıyoruz!
+            await page.close();
         }
     }
 });
