@@ -314,6 +314,38 @@ function App() {
         version: item.version,
         archiver: item.archiver
       }));
+
+      // Blockchain'den txHash ve cüzdan bilgilerini çekerek Keşfet verisini zenginleştir
+      if (provider) {
+        try {
+          const contract = new Contract(CONTRACT_ADDRESS, ChainArchiveABI, provider);
+          const filter = contract.filters.ArchiveCreated();
+          const events = await contract.queryFilter(filter);
+          
+          const blockchainData = new Map();
+          events.forEach((event: any) => {
+            if (event.args && event.args.length >= 3) {
+              const cid = event.args[2];
+              blockchainData.set(cid, {
+                txHash: event.transactionHash,
+                archiver: event.args[0]
+              });
+            }
+          });
+
+          parsed.forEach(item => {
+            if (blockchainData.has(item.cid)) {
+              item.txHash = blockchainData.get(item.cid).txHash;
+              if (!item.archiver || item.archiver === "Bilinmiyor") {
+                item.archiver = blockchainData.get(item.cid).archiver;
+              }
+            }
+          });
+        } catch (chainErr) {
+          console.error("Blockchain verileri alınırken hata:", chainErr);
+        }
+      }
+
       setExploreResults(parsed);
     } catch (err) {
       console.error("Keşfet hatası:", err);
@@ -868,6 +900,14 @@ function App() {
                           {item.cid}
                         </a>
                       </div>
+                      {item.txHash && (
+                        <div className="flex justify-between items-center mt-1 border-t border-white/5 pt-2">
+                          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">İşlem (TX)</span>
+                          <a href={`https://sepolia.etherscan.io/tx/${item.txHash}`} target="_blank" rel="noreferrer" className="text-sm font-mono text-blue-400 hover:text-blue-300 hover:underline truncate ml-4 max-w-[200px]">
+                            {item.txHash}
+                          </a>
+                        </div>
+                      )}
                       {item.archiver && item.archiver !== "Bilinmiyor" && (
                         <div className="flex justify-between items-center mt-1 border-t border-white/5 pt-2">
                           <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Cüzdan</span>
