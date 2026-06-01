@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Link as LinkIcon, Clock, ShieldCheck, Database, ArrowRight, Loader2, CheckCircle2, Wallet } from 'lucide-react';
+import { Search, Link as LinkIcon, Clock, ShieldCheck, Database, ArrowRight, Loader2, CheckCircle2, Wallet, Code } from 'lucide-react';
 import { BrowserProvider, Contract } from 'ethers';
 
 declare global {
@@ -612,9 +612,14 @@ function App() {
               <div className="space-y-4 text-left">
                 <div className="bg-zinc-950/50 p-5 rounded-xl border border-white/5">
                   <div className="text-sm text-zinc-500 mb-2 uppercase tracking-wider">İçerik ID (IPFS CID)</div>
-                  <div className="font-mono text-emerald-400 text-base break-all select-all">
+                  <a 
+                    href={`https://ipfs.io/ipfs/${archiveResult.cid}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-emerald-400 hover:text-emerald-300 hover:underline text-base break-all flex items-center gap-2"
+                  >
                     {archiveResult.cid}
-                  </div>
+                  </a>
                 </div>
                 {archiveResult.txHash && (
                   <div className="bg-zinc-950/50 p-5 rounded-xl border border-white/5">
@@ -631,7 +636,12 @@ function App() {
                 )}
                 {archiveResult.screenshot && (
                   <div className="bg-zinc-950/50 p-2 rounded-xl border border-white/5 mt-4">
-                    <div className="text-sm text-zinc-500 mb-2 px-3 pt-2 uppercase tracking-wider">Web Sitesi Görüntüsü</div>
+                    <div className="text-sm text-zinc-500 mb-3 px-3 pt-2 uppercase tracking-wider flex justify-between items-center">
+                      <span>Web Sitesi Görüntüsü</span>
+                      <a href={`https://ipfs.io/ipfs/${archiveResult.cid}/ChainArchive/source.html`} target="_blank" rel="noreferrer" className="bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg text-xs hover:bg-purple-500/30 transition-colors flex items-center gap-1.5 font-semibold">
+                        <Code className="w-3 h-3" /> HTML Kodunu Gör
+                      </a>
+                    </div>
                     <img 
                       src={archiveResult.screenshot} 
                       alt="Website Screenshot" 
@@ -639,16 +649,26 @@ function App() {
                     />
                   </div>
                 )}
-                <div className="flex justify-between items-center px-3 pt-2">
+                <div className="flex flex-col sm:flex-row justify-between items-center px-3 pt-2 gap-4">
                   <span className="text-base text-zinc-400">Tarih: {archiveResult.timestamp}</span>
-                  <a 
-                    href={`https://ipfs.io/ipfs/${archiveResult.cid}`} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="text-base text-purple-400 hover:text-purple-300 underline underline-offset-4"
-                  >
-                    Ağda Görüntüle
-                  </a>
+                  <div className="flex gap-4">
+                    <a 
+                      href={`https://sepolia.etherscan.io/tx/${archiveResult.txHash}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="text-base text-blue-400 hover:text-blue-300 underline underline-offset-4"
+                    >
+                      Etherscan'da Gör
+                    </a>
+                    <a 
+                      href={`https://ipfs.io/ipfs/${archiveResult.cid}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="text-base text-purple-400 hover:text-purple-300 underline underline-offset-4"
+                    >
+                      IPFS'te Gör
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
