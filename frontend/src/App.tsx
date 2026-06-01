@@ -1,7 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Link as LinkIcon, Clock, ShieldCheck, Database, ArrowRight, Loader2, CheckCircle2, Wallet } from 'lucide-react';
-import { uploadToIPFS } from './services/ipfs';
 import { BrowserProvider, Contract } from 'ethers';
+
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
 
 interface ArchiveHistory {
   id: string;
@@ -117,7 +122,8 @@ function App() {
 
     try {
       // 1. Backend'e İstek At (Ekran görüntüsü ve HTML alma)
-      const response = await fetch('http://localhost:3001/api/archive', {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${backendUrl}/api/archive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })

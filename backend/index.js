@@ -1,10 +1,11 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const puppeteer = require('puppeteer');
 const crypto = require('crypto');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
@@ -27,16 +28,7 @@ app.post('/api/archive', async (req, res) => {
     let browser;
     try {
         const fs = require('fs');
-        let executablePath = '';
         
-        // Windows için standart Edge ve Chrome yolları
-        const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-        const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-        
-        if (fs.existsSync(edgePath)) executablePath = edgePath;
-        else if (fs.existsSync(chromePath)) executablePath = chromePath;
-        else throw new Error("Bilgisayarda Chrome veya Edge tarayıcısı bulunamadı.");
-
         // URL formatını düzelt (http/https yoksa ekle)
         let targetUrl = url;
         if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
@@ -45,12 +37,26 @@ app.post('/api/archive', async (req, res) => {
 
         console.log(`[Crawler] Başlatılıyor: ${targetUrl}`);
         
-        // Launch Puppeteer (headless browser using explicit local browser)
-        browser = await puppeteer.launch({
+        // Launch options (headless browser)
+        const launchOptions = {
             headless: "new",
-            executablePath: executablePath,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
+        };
+
+        // Eğer yerel Windows ortamındaysak, kurulu Chrome veya Edge'i kullanmayı deneyelim (opsiyonel)
+        if (process.platform === 'win32') {
+            const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+            const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+            
+            if (fs.existsSync(edgePath)) {
+                launchOptions.executablePath = edgePath;
+            } else if (fs.existsSync(chromePath)) {
+                launchOptions.executablePath = chromePath;
+            }
+        }
+        
+        // Launch Puppeteer
+        browser = await puppeteer.launch(launchOptions);
 
         const page = await browser.newPage();
         
@@ -75,8 +81,6 @@ app.post('/api/archive', async (req, res) => {
 
         console.log(`[Crawler] İşlem başarılı. IPFS/Pinata'ya yükleniyor...`);
 
-        // .env dosyasındaki ayarları oku
-        require('dotenv').config();
         let finalCid = "Simulated_CID_" + Date.now(); // Varsayılan fallback CID
 
         if (process.env.PINATA_JWT && process.env.PINATA_JWT !== "buraya_pinata_jwt_token_gelecek") {
