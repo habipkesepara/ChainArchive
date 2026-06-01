@@ -304,7 +304,7 @@ function App() {
       const response = await fetch(`${backendUrl}/api/explore`);
       const data = await response.json();
       
-      const parsed: ArchiveHistory[] = data.map((item: { url: string; originalUrl: string; cid: string; timestamp: string; title: string; tag: string; author: string; }) => ({
+      const parsed: ArchiveHistory[] = data.map((item: { url: string; originalUrl: string; cid: string; timestamp: string; title: string; tag: string; author: string; version?: string; }) => ({
         url: item.originalUrl || item.url || "",
         cid: item.cid,
         timestamp: new Date(item.timestamp).toLocaleString(),
@@ -730,10 +730,15 @@ function App() {
                     
                     {/* Görsel Önizleme Alanı */}
                     <div className="mb-4 rounded-xl overflow-hidden border border-white/5 bg-black/50 group relative">
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10 backdrop-blur-sm">
-                        <a href={`https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-2">
-                           <Search className="w-3 h-3" /> Tam Boyut Gör
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10 backdrop-blur-sm gap-2">
+                        <a href={item.version === "2" ? `https://ipfs.io/ipfs/${item.cid}/ChainArchive/screenshot.jpg` : `https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-2">
+                           <Search className="w-3 h-3" /> Görseli Aç
                         </a>
+                        {item.version === "2" && (
+                          <a href={`https://ipfs.io/ipfs/${item.cid}/ChainArchive/source.html`} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-2">
+                             <Code className="w-3 h-3" /> HTML Kodu
+                          </a>
+                        )}
                       </div>
                       <img 
                         src={item.version === "2" ? `https://ipfs.io/ipfs/${item.cid}/ChainArchive/screenshot.jpg` : `https://ipfs.io/ipfs/${item.cid}`} 
@@ -766,6 +771,14 @@ function App() {
                           {item.cid}
                         </a>
                       </div>
+                      {item.txHash && (
+                        <div className="flex justify-between items-center mt-1 border-t border-white/5 pt-2">
+                          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">İşlem (TX)</span>
+                          <a href={`https://sepolia.etherscan.io/tx/${item.txHash}`} target="_blank" rel="noreferrer" className="text-sm font-mono text-blue-400 hover:text-blue-300 hover:underline truncate ml-4 max-w-[200px]">
+                            {item.txHash}
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
