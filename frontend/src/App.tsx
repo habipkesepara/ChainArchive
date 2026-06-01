@@ -91,7 +91,10 @@ function App() {
 
   const connectWallet = async () => {
     if (!window.ethereum) {
-      setError("Lütfen tarayıcınıza MetaMask eklentisini kurun. (https://metamask.io/)");
+      setError("MetaMask eklentisi bulunamadı. Kurulum sayfasına yönlendiriliyorsunuz...");
+      setTimeout(() => {
+        window.open('https://metamask.io/download/', '_blank');
+      }, 1500);
       return;
     }
     try {
