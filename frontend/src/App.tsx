@@ -304,14 +304,15 @@ function App() {
       const response = await fetch(`${backendUrl}/api/explore`);
       const data = await response.json();
       
-      const parsed: ArchiveHistory[] = data.map((item: { url: string; originalUrl: string; cid: string; timestamp: string; title: string; tag: string; author: string; version?: string; }) => ({
+      const parsed: ArchiveHistory[] = data.map((item: { url: string; originalUrl: string; cid: string; timestamp: string; title: string; tag: string; author: string; version?: string; archiver?: string; }) => ({
         url: item.originalUrl || item.url || "",
         cid: item.cid,
         timestamp: new Date(item.timestamp).toLocaleString(),
         title: item.title,
         tag: item.tag,
         author: item.author,
-        version: item.version
+        version: item.version,
+        archiver: item.archiver
       }));
       setExploreResults(parsed);
     } catch (err) {
@@ -344,7 +345,7 @@ function App() {
       const response = await fetch(`${backendUrl}/api/archive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, title, tag, author })
+        body: JSON.stringify({ url, title, tag, author, archiver: account })
       });
       
       const data = await response.json();
@@ -638,7 +639,7 @@ function App() {
                   <div className="bg-zinc-950/50 p-2 rounded-xl border border-white/5 mt-4">
                     <div className="text-sm text-zinc-500 mb-3 px-3 pt-2 uppercase tracking-wider flex justify-between items-center">
                       <span>Web Sitesi Görüntüsü</span>
-                      <a href={`https://ipfs.io/ipfs/${archiveResult.cid}/ChainArchive/source.html`} target="_blank" rel="noreferrer" className="bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg text-xs hover:bg-purple-500/30 transition-colors flex items-center gap-1.5 font-semibold">
+                      <a href={`https://ipfs.io/ipfs/${archiveResult.cid}/source.html`} target="_blank" rel="noreferrer" className="bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg text-xs hover:bg-purple-500/30 transition-colors flex items-center gap-1.5 font-semibold">
                         <Code className="w-3 h-3" /> HTML Kodunu Gör
                       </a>
                     </div>
@@ -731,25 +732,23 @@ function App() {
                     {/* Görsel Önizleme Alanı */}
                     <div className="mb-4 rounded-xl overflow-hidden border border-white/5 bg-black/50 group relative">
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10 backdrop-blur-sm gap-2">
-                        <a href={item.version === "2" ? `https://ipfs.io/ipfs/${item.cid}/ChainArchive/screenshot.jpg` : `https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-2">
+                        <a href={item.version === "2" ? `https://ipfs.io/ipfs/${item.cid}/screenshot.jpg` : `https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-2">
                            <Search className="w-3 h-3" /> Görseli Aç
                         </a>
                         {item.version === "2" && (
-                          <a href={`https://ipfs.io/ipfs/${item.cid}/ChainArchive/source.html`} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-2">
+                          <a href={`https://ipfs.io/ipfs/${item.cid}/source.html`} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-2">
                              <Code className="w-3 h-3" /> HTML Kodu
                           </a>
                         )}
                       </div>
                       <img 
-                        src={item.version === "2" ? `https://ipfs.io/ipfs/${item.cid}/ChainArchive/screenshot.jpg` : `https://ipfs.io/ipfs/${item.cid}`} 
+                        src={item.version === "2" ? `https://ipfs.io/ipfs/${item.cid}/screenshot.jpg` : `https://ipfs.io/ipfs/${item.cid}`} 
                         alt="Archive Preview" 
                         className="w-full h-32 object-cover opacity-80 group-hover:opacity-100 transition-all duration-500 transform group-hover:scale-105"
                         loading="lazy"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
-                          if (target.src.includes('/ChainArchive/screenshot.jpg')) {
-                            target.src = `https://ipfs.io/ipfs/${item.cid}/screenshot.jpg`;
-                          } else if (target.src.includes('/screenshot.jpg')) {
+                          if (target.src.includes('/screenshot.jpg')) {
                             target.src = `https://ipfs.io/ipfs/${item.cid}`;
                           } else {
                             target.style.display = 'none';
@@ -817,18 +816,66 @@ function App() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {exploreResults.map((item, index) => (
-                  <div key={index} className="bg-zinc-900/80 border border-white/10 p-6 rounded-3xl flex flex-col gap-4 hover:border-emerald-500/50 transition-all hover:shadow-lg hover:shadow-emerald-500/10 group">
-                    <div className="flex justify-between items-start">
-                      <span className="text-sm font-mono text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded">{item.timestamp}</span>
-                      <a href={`https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="text-xs bg-zinc-800 text-zinc-300 hover:bg-emerald-500 hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium">Görüntüle</a>
+                  <div key={index} className="bg-zinc-900/50 border border-white/5 p-6 rounded-2xl backdrop-blur-sm hover:bg-zinc-800/50 transition-colors flex flex-col justify-between overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 bg-emerald-500/10 text-emerald-400 px-3 py-1 text-[10px] font-semibold rounded-bl-lg border-b border-l border-emerald-500/20 flex items-center gap-1">
+                      <Database className="w-3 h-3" /> Ağdan Çekildi
                     </div>
                     <div>
-                      <div className="text-zinc-100 font-bold text-lg line-clamp-2 mb-1 group-hover:text-emerald-400 transition-colors">{item.title && item.title !== "Başlıksız Arşiv" ? item.title : item.url}</div>
-                      {item.title && item.title !== "Başlıksız Arşiv" && <div className="text-xs text-zinc-500 truncate">{item.url}</div>}
+                      <div className="text-sm text-purple-400 mb-2 font-mono font-medium">{item.timestamp}</div>
+                      <a href={item.url} target="_blank" rel="noreferrer" className="text-lg md:text-xl font-bold text-zinc-100 hover:text-white hover:underline line-clamp-1 mb-3">
+                        {item.title && item.title !== "Başlıksız Arşiv" ? item.title : item.url}
+                      </a>
                     </div>
-                    <div className="flex gap-2 flex-wrap mt-auto pt-2 border-t border-white/5">
-                      {item.tag && <span className="text-[11px] bg-purple-500/20 text-purple-400 px-2 py-1 rounded font-medium">{item.tag}</span>}
-                      {item.author && item.author !== "Anonim" && <span className="text-[11px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded font-medium">👤 {item.author}</span>}
+                    
+                    {/* Görsel Önizleme Alanı */}
+                    <div className="mb-4 rounded-xl overflow-hidden border border-white/5 bg-black/50 group/image relative">
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/image:opacity-100 transition-opacity flex items-center justify-center z-10 backdrop-blur-sm gap-2">
+                        <a href={item.version === "2" ? `https://ipfs.io/ipfs/${item.cid}/screenshot.jpg` : `https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-2">
+                           <Search className="w-3 h-3" /> Görseli Aç
+                        </a>
+                        {item.version === "2" && (
+                          <a href={`https://ipfs.io/ipfs/${item.cid}/source.html`} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-2">
+                             <Code className="w-3 h-3" /> HTML Kodu
+                          </a>
+                        )}
+                      </div>
+                      <img 
+                        src={item.version === "2" ? `https://ipfs.io/ipfs/${item.cid}/screenshot.jpg` : `https://ipfs.io/ipfs/${item.cid}`} 
+                        alt="Archive Preview" 
+                        className="w-full h-32 object-cover opacity-80 group-hover/image:opacity-100 transition-all duration-500 transform group-hover/image:scale-105"
+                        loading="lazy"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          if (target.src.includes('/screenshot.jpg')) {
+                            target.src = `https://ipfs.io/ipfs/${item.cid}`;
+                          } else {
+                            target.style.display = 'none';
+                            target.parentElement!.classList.add('flex', 'items-center', 'justify-center', 'h-40');
+                            target.parentElement!.innerHTML = '<div class="text-zinc-600 text-sm flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 mb-2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>Görsel IPFS\'ten yükleniyor...</div>';
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <div className="bg-zinc-950/50 p-4 rounded-xl border border-white/5 flex flex-col gap-3 mt-auto">
+                      <div className="flex flex-wrap gap-2 mb-2">
+                          {item.tag && <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-1 rounded border border-purple-500/20">{item.tag}</span>}
+                          {item.author && item.author !== "Anonim" && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded border border-blue-500/20">👤 {item.author}</span>}
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">IPFS CID</span>
+                        <a href={`https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="text-sm font-mono text-emerald-400 hover:text-emerald-300 hover:underline truncate ml-4 max-w-[200px]">
+                          {item.cid}
+                        </a>
+                      </div>
+                      {item.archiver && item.archiver !== "Bilinmiyor" && (
+                        <div className="flex justify-between items-center mt-1 border-t border-white/5 pt-2">
+                          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Cüzdan</span>
+                          <span className="text-sm font-mono text-zinc-400 truncate ml-4 max-w-[200px]">
+                            {item.archiver.substring(0, 6)}...{item.archiver.substring(item.archiver.length - 4)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
