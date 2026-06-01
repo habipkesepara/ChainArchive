@@ -5,6 +5,7 @@ const puppeteer = require('puppeteer');
 const crypto = require('crypto');
 
 const app = express();
+app.set('trust proxy', 1); // Render veya Vercel gibi proxy arkasında rate-limit için zorunlu
 const PORT = process.env.PORT || 3001;
 
 const rateLimit = require('express-rate-limit');
@@ -21,7 +22,7 @@ const limiter = rateLimit({
 // Middleware
 app.use(cors({
     origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Vercel URL'sini .env'den al veya local'e izin ver
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'DELETE'],
     allowedHeaders: ['Content-Type']
 }));
 app.use(express.json());
@@ -104,8 +105,17 @@ app.post('/api/archive', async (req, res) => {
         
         const htmlContent = await page.content();
         
-        // Tam sayfa ekran görüntüsünü al
-        const screenshotBase64 = await page.screenshot({ encoding: 'base64', fullPage: true, type: 'jpeg', quality: 60 });
+        // Sayfa çok uzunsa `fullPage: true` takılabilir. Max 15000px yükseklikle sınırlıyoruz.
+        const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+        const clipHeight = Math.min(pageHeight, 15000);
+
+        // Tam sayfa ekran görüntüsünü al (veya limitli)
+        const screenshotBase64 = await page.screenshot({ 
+            encoding: 'base64', 
+            type: 'jpeg', 
+            quality: 60,
+            clip: { x: 0, y: 0, width: 1280, height: clipHeight }
+        });
 
         console.log(`[Crawler] İşlem başarılı. IPFS/Pinata'ya yükleniyor...`);
 
@@ -114,7 +124,11 @@ app.post('/api/archive', async (req, res) => {
         if (process.env.PINATA_JWT && process.env.PINATA_JWT !== "buraya_pinata_jwt_token_gelecek") {
             try {
                 // Ekran görüntüsünü Base64 formatından Buffer formatına çeviriyoruz ki Pinata kabul etsin
-                const screenshotBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 60 });
+                const screenshotBuffer = await page.screenshot({ 
+                    type: 'jpeg', 
+                    quality: 60,
+                    clip: { x: 0, y: 0, width: 1280, height: clipHeight }
+                });
                 
                 const FormData = require('form-data');
                 const axios = require('axios');
