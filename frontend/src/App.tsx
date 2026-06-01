@@ -31,6 +31,9 @@ const CONTRACT_ADDRESS = "0xA98D252939c9E8413CB98Aa665dcA7384727F9AA";
 
 function App() {
   const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [tag, setTag] = useState('Diğer');
+  const [author, setAuthor] = useState('');
   const [archiveStep, setArchiveStep] = useState<'idle' | 'crawling' | 'wallet_approval' | 'mining'>('idle');
   const [archiveResult, setArchiveResult] = useState<{ cid: string; timestamp: string; txHash?: string; screenshot?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -227,12 +230,12 @@ function App() {
     setArchiveResult(null);
 
     try {
-      // 1. Backend'e İstek At (Ekran görüntüsü ve HTML alma)
+      // 1. Backend'e İstek At (Ekran görüntüsü, HTML alma ve Metadataları gönderme)
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
       const response = await fetch(`${backendUrl}/api/archive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url, title, tag, author })
       });
       
       const data = await response.json();
@@ -311,6 +314,45 @@ function App() {
           <p className="text-zinc-400 text-lg md:text-xl mb-8 max-w-2xl mx-auto leading-relaxed">
             İnternet üzerindeki bilginin kaybolmasını, değiştirilmesini veya sansürlenmesini engelleyin. İçerikleri sonsuza kadar blokzincire kazıyın.
           </p>
+
+          <div className="flex flex-col md:flex-row gap-4 max-w-3xl mx-auto mb-4 z-10 relative">
+            <input 
+              type="text" 
+              placeholder="Başlık (Opsiyonel)"
+              className="flex-grow bg-zinc-900/80 border border-white/10 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-shadow"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={archiveStep !== 'idle' || isSearching}
+              maxLength={50}
+            />
+            <input 
+              type="text" 
+              placeholder="Kullanıcı Adı (Opsiyonel)"
+              className="md:w-1/4 bg-zinc-900/80 border border-white/10 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-shadow"
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              disabled={archiveStep !== 'idle' || isSearching}
+              maxLength={30}
+            />
+            <div className="relative md:w-1/4">
+              <select 
+                className="w-full bg-zinc-900/80 border border-white/10 rounded-xl px-4 py-3 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500 appearance-none transition-shadow cursor-pointer"
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                disabled={archiveStep !== 'idle' || isSearching}
+              >
+                <option value="Diğer">Etiket: Diğer</option>
+                <option value="Haber">Haber</option>
+                <option value="Sosyal Medya">Sosyal Medya</option>
+                <option value="Kanıt">Kanıt</option>
+                <option value="Finans">Finans</option>
+                <option value="Makale">Makale</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-zinc-400">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+              </div>
+            </div>
+          </div>
 
           {/* Arşivleme Girdi Alanı */}
           <div className="relative max-w-2xl mx-auto group mb-8">

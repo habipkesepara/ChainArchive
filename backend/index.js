@@ -69,7 +69,7 @@ async function getBrowser() {
 }
 
 app.post('/api/archive', async (req, res) => {
-    const { url } = req.body;
+    const { url, title, tag, author } = req.body;
 
     if (!url) {
         return res.status(400).json({ error: 'URL is required' });
@@ -125,10 +125,15 @@ app.post('/api/archive', async (req, res) => {
                     filepath: 'screenshot.jpg'
                 });
                 
-                // Metadataları (Örn: Orijinal URL) de IPFS dosyasına ekliyoruz
+                // Metadataları (Örn: Orijinal URL, Başlık ve Etiket) de IPFS dosyasına ekliyoruz
                 const metadata = JSON.stringify({
-                    name: `ChainArchive_Screenshot`,
-                    keyvalues: { originalUrl: targetUrl }
+                    name: `ChainArchive_${title ? title.substring(0, 50).replace(/[^a-zA-Z0-9 ]/g, '') : 'Screenshot'}`,
+                    keyvalues: { 
+                        originalUrl: targetUrl,
+                        title: title || "Başlıksız Arşiv",
+                        tag: tag || "Diğer",
+                        author: author || "Anonim"
+                    }
                 });
                 data.append('pinataMetadata', metadata);
 
