@@ -124,11 +124,8 @@ app.post('/api/archive', async (req, res) => {
         if (process.env.PINATA_JWT && process.env.PINATA_JWT !== "buraya_pinata_jwt_token_gelecek") {
             try {
                 // Ekran görüntüsünü Base64 formatından Buffer formatına çeviriyoruz ki Pinata kabul etsin
-                const screenshotBuffer = await page.screenshot({ 
-                    type: 'jpeg', 
-                    quality: 60,
-                    clip: { x: 0, y: 0, width: 1280, height: clipHeight }
-                });
+                // page.screenshot() işlemini iki kere çağırmamak için base64 verisini dönüştürüyoruz (Performans artışı)
+                const screenshotBuffer = Buffer.from(screenshotBase64, 'base64');
                 
                 const FormData = require('form-data');
                 const axios = require('axios');
