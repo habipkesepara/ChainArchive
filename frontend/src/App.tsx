@@ -17,6 +17,7 @@ interface ArchiveHistory {
   cid: string;
   timestamp: string;
   txHash: string;
+  archiver?: string;
 }
 
 // ChainArchive Akıllı Sözleşme ABI'si
@@ -34,10 +35,16 @@ function App() {
   const [archiveResult, setArchiveResult] = useState<{ cid: string; timestamp: string; txHash?: string; screenshot?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Web3 Durum Değişkenleri
   const [account, setAccount] = useState<string | null>(null);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [history, setHistory] = useState<ArchiveHistory[]>([]);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+
+  // Arama Durum Değişkenleri
+  const [searchResults, setSearchResults] = useState<ArchiveHistory[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Uygulama açıldığında cüzdanı kontrol et
   useEffect(() => {
@@ -45,8 +52,7 @@ function App() {
     const initWeb3 = async () => {
       if (window.ethereum) {
         await Promise.resolve(); // Delay state update to avoid sync render warning
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const web3Provider = new BrowserProvider(window.ethereum as any);
+        const web3Provider = new BrowserProvider(window.ethereum as never);
         if (isMounted) setProvider(web3Provider);
         
         window.ethereum.request({ method: 'eth_accounts' })
@@ -121,14 +127,15 @@ function App() {
       const logs = await contract.queryFilter(filter);
       
       const parsedHistory: ArchiveHistory[] = logs.map((log) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const parsedLog = contract.interface.parseLog(log as any);
+        const logData = log as unknown as { topics: string[]; data: string; transactionHash: string; };
+        const parsedLog = contract.interface.parseLog(logData);
         return {
           id: parsedLog?.args[0].toString() || "",
           url: parsedLog?.args[1] || "",
           cid: parsedLog?.args[2] || "",
           timestamp: new Date(Number(parsedLog?.args[4]) * 1000).toLocaleString(),
-          txHash: log.transactionHash
+          txHash: logData.transactionHash,
+          archiver: parsedLog?.args[3] || ""
         };
       }).reverse(); // En yeniler en üstte
       
@@ -149,6 +156,60 @@ function App() {
     }
     return () => { isMounted = false; };
   }, [account, provider, fetchHistory]);
+
+  const searchUrlHistory = async () => {
+    if (!url.trim()) return;
+    
+    if (!window.ethereum) {
+      setError("MetaMask eklentisi bulunamadı. Kurulum sayfasına yönlendiriliyorsunuz...");
+      setTimeout(() => { window.open('https://metamask.io/download/', '_blank'); }, 1500);
+      return;
+    }
+    
+    setIsSearching(true);
+    setHasSearched(true);
+    setError(null);
+    setSearchResults([]);
+    setArchiveResult(null);
+
+    try {
+      const isNetworkCorrect = await checkAndSwitchNetwork();
+      if (!isNetworkCorrect) {
+        setIsSearching(false);
+        return;
+      }
+
+      const web3Provider = new BrowserProvider(window.ethereum as never);
+      const contract = new Contract(CONTRACT_ADDRESS, ChainArchiveABI, web3Provider);
+      
+      const filter = contract.filters.ArchiveCreated();
+      const logs = await contract.queryFilter(filter);
+      
+      const parsedHistory: ArchiveHistory[] = logs.map((log) => {
+        const logData = log as unknown as { topics: string[]; data: string; transactionHash: string; };
+        const parsedLog = contract.interface.parseLog(logData);
+        return {
+          id: parsedLog?.args[0].toString() || "",
+          url: parsedLog?.args[1] || "",
+          cid: parsedLog?.args[2] || "",
+          timestamp: new Date(Number(parsedLog?.args[4]) * 1000).toLocaleString(),
+          txHash: logData.transactionHash,
+          archiver: parsedLog?.args[3] || ""
+        };
+      });
+
+      const filtered = parsedHistory
+        .filter(item => item.url.toLowerCase().includes(url.toLowerCase().trim()))
+        .reverse();
+
+      setSearchResults(filtered);
+    } catch (err: unknown) {
+      console.error(err);
+      setError("Arama sırasında bir hata oluştu.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const handleArchive = async () => {
     if (!url.trim()) return;
@@ -263,28 +324,68 @@ function App() {
                 placeholder="Arşivlenecek URL'yi girin (örn: https://news.com/...)"
                 className="flex-grow w-full bg-transparent border-none outline-none text-zinc-100 placeholder-zinc-500 px-3 py-3 text-lg"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                disabled={archiveStep !== 'idle'}
+                onChange={(e) => { setUrl(e.target.value); setHasSearched(false); }}
+                disabled={archiveStep !== 'idle' || isSearching}
                 onKeyDown={(e) => e.key === 'Enter' && handleArchive()}
               />
-              <button 
-                onClick={handleArchive}
-                disabled={archiveStep !== 'idle' || !url.trim()}
-                className="w-full md:w-auto bg-purple-500 hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl text-base font-medium transition-colors flex items-center justify-center gap-2 mt-2 md:mt-0"
-              >
-                {archiveStep !== 'idle' ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {archiveStep === 'crawling' && "🌐 Taranıyor (1/3)..."}
-                    {archiveStep === 'wallet_approval' && "🔑 Cüzdan Onayı (2/3)..."}
-                    {archiveStep === 'mining' && "⛓️ Blokzincir Yazımı (3/3)..."}
-                  </span>
-                ) : (
-                  <>Arşivle <ArrowRight className="w-4 h-4" /></>
-                )}
-              </button>
+              <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto p-1">
+                <button 
+                  onClick={searchUrlHistory}
+                  disabled={isSearching || archiveStep !== 'idle' || !url.trim()}
+                  className="w-full md:w-auto bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-3 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  Sorgula
+                </button>
+                <button 
+                  onClick={handleArchive}
+                  disabled={archiveStep !== 'idle' || !url.trim() || isSearching}
+                  className="w-full md:w-auto bg-purple-500 hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl text-base font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  {archiveStep !== 'idle' ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {archiveStep === 'crawling' && "Taranıyor (1/3)"}
+                      {archiveStep === 'wallet_approval' && "Cüzdan (2/3)"}
+                      {archiveStep === 'mining' && "Blokzincir (3/3)"}
+                    </span>
+                  ) : (
+                    <>Arşivle <ArrowRight className="w-4 h-4" /></>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Arama Sonuçları */}
+          {hasSearched && searchResults.length > 0 && !archiveResult && (
+            <div className="max-w-4xl mx-auto mb-10 text-left animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center justify-center gap-2 mb-6 text-emerald-400 bg-emerald-500/10 py-3 px-6 rounded-2xl border border-emerald-500/20">
+                <CheckCircle2 className="w-5 h-5" />
+                <h3 className="text-lg font-bold">Bu URL daha önce {searchResults.length} kez arşivlenmiş!</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {searchResults.map((item, index) => (
+                  <div key={index} className="bg-zinc-900/80 border border-white/10 p-5 rounded-2xl flex flex-col gap-3 hover:border-emerald-500/50 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <span className="text-sm font-mono text-purple-400">{item.timestamp}</span>
+                      <a href={`https://ipfs.io/ipfs/${item.cid}`} target="_blank" rel="noreferrer" className="text-xs bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg transition-colors font-medium flex items-center gap-1">
+                        <Search className="w-3 h-3" /> Görüntüle
+                      </a>
+                    </div>
+                    <div className="text-zinc-100 font-medium truncate">{item.url}</div>
+                    <div className="text-xs text-zinc-500 bg-black/30 p-2 rounded-lg">Arşivleyen: <span className="font-mono text-zinc-400">{formatAddress(item.archiver || "")}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {hasSearched && searchResults.length === 0 && !isSearching && !archiveResult && (
+            <div className="max-w-3xl mx-auto mb-10 p-5 bg-zinc-900/50 border border-white/5 rounded-xl text-zinc-400 text-base">
+              Bu URL için geçmişte yapılmış bir arşiv bulunamadı. İlk arşivi siz oluşturun!
+            </div>
+          )}
 
           {error && (
             <div className="max-w-3xl mx-auto mb-10 p-5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-base">
