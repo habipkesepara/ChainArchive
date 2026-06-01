@@ -120,19 +120,25 @@ app.post('/api/archive', async (req, res) => {
                 const axios = require('axios');
                 const data = new FormData();
                 
-                // Resmi IPFS'e atıyoruz
+                // Resmi IPFS'e atıyoruz (Klasör yapısı için filepath belirtiyoruz)
                 data.append('file', screenshotBuffer, {
-                    filepath: 'screenshot.jpg'
+                    filepath: 'ChainArchive/screenshot.jpg'
+                });
+                
+                // HTML Kodunu IPFS'e atıyoruz
+                data.append('file', Buffer.from(htmlContent, 'utf-8'), {
+                    filepath: 'ChainArchive/source.html'
                 });
                 
                 // Metadataları (Örn: Orijinal URL, Başlık ve Etiket) de IPFS dosyasına ekliyoruz
                 const metadata = JSON.stringify({
-                    name: `ChainArchive_${title ? title.substring(0, 50).replace(/[^a-zA-Z0-9 ]/g, '') : 'Screenshot'}`,
+                    name: `ChainArchive_${title ? title.substring(0, 50).replace(/[^a-zA-Z0-9 ]/g, '') : 'Folder'}`,
                     keyvalues: { 
                         originalUrl: targetUrl,
                         title: title || "Başlıksız Arşiv",
                         tag: tag || "Diğer",
-                        author: author || "Anonim"
+                        author: author || "Anonim",
+                        version: "2"
                     }
                 });
                 data.append('pinataMetadata', metadata);

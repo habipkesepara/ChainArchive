@@ -21,6 +21,7 @@ interface ArchiveHistory {
   title?: string;
   tag?: string;
   author?: string;
+  version?: string;
 }
 
 const parseError = (err: unknown): string => {
@@ -191,6 +192,7 @@ function App() {
               item.title = metaMap[item.cid].title;
               item.tag = metaMap[item.cid].tag;
               item.author = metaMap[item.cid].author;
+              item.version = metaMap[item.cid].version;
             }
           });
         } catch (e) {
@@ -278,6 +280,7 @@ function App() {
               item.title = metaMap[item.cid].title;
               item.tag = metaMap[item.cid].tag;
               item.author = metaMap[item.cid].author;
+              item.version = metaMap[item.cid].version;
             }
           });
         } catch (e) {
@@ -307,7 +310,8 @@ function App() {
         timestamp: new Date(item.timestamp).toLocaleString(),
         title: item.title,
         tag: item.tag,
-        author: item.author
+        author: item.author,
+        version: item.version
       }));
       setExploreResults(parsed);
     } catch (err) {
@@ -696,14 +700,21 @@ function App() {
                         </a>
                       </div>
                       <img 
-                        src={`https://ipfs.io/ipfs/${item.cid}`} 
+                        src={item.version === "2" ? `https://ipfs.io/ipfs/${item.cid}/ChainArchive/screenshot.jpg` : `https://ipfs.io/ipfs/${item.cid}`} 
                         alt="Archive Preview" 
                         className="w-full h-32 object-cover opacity-80 group-hover:opacity-100 transition-all duration-500 transform group-hover:scale-105"
                         loading="lazy"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center', 'h-40');
-                          (e.target as HTMLImageElement).parentElement!.innerHTML = '<div class="text-zinc-600 text-sm flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 mb-2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>Görsel IPFS\'ten yükleniyor...</div>';
+                          const target = e.target as HTMLImageElement;
+                          if (target.src.includes('/ChainArchive/screenshot.jpg')) {
+                            target.src = `https://ipfs.io/ipfs/${item.cid}/screenshot.jpg`;
+                          } else if (target.src.includes('/screenshot.jpg')) {
+                            target.src = `https://ipfs.io/ipfs/${item.cid}`;
+                          } else {
+                            target.style.display = 'none';
+                            target.parentElement!.classList.add('flex', 'items-center', 'justify-center', 'h-40');
+                            target.parentElement!.innerHTML = '<div class="text-zinc-600 text-sm flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 mb-2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>Görsel IPFS\'ten yükleniyor...</div>';
+                          }
                         }}
                       />
                     </div>
