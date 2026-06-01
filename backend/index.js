@@ -21,7 +21,7 @@ const limiter = rateLimit({
 // Middleware
 app.use(cors({
     origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Vercel URL'sini .env'den al veya local'e izin ver
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'DELETE'],
     allowedHeaders: ['Content-Type']
 }));
 app.use(express.json());
